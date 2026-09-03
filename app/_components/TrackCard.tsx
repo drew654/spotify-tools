@@ -35,7 +35,7 @@ const TrackCard = ({
     : null;
 
   return (
-    <div className="glass-panel rounded-xl p-4 flex items-center gap-4 relative overflow-hidden group">
+    <div className="glass-panel rounded-xl p-4 flex items-center gap-4 relative overflow-hidden group shrink-0">
       {/* Background Glow when playing */}
       {isPlaying && (
         <div className="absolute inset-0 bg-spotify-green/5 pointer-events-none animate-pulse-slow" />

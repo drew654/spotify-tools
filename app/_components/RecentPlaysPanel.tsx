@@ -44,7 +44,7 @@ const RecentPlaysPanel = () => {
         <div className="h-6 w-32 bg-white/10 rounded" />
         <div className="flex flex-col gap-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-20 bg-white/5 rounded-xl" />
+            <div key={i} className="h-20 bg-white/5 rounded-xl shrink-0" />
           ))}
         </div>
       </div>
