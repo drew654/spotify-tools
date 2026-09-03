@@ -3,6 +3,8 @@ import { getCurrentlyPlaying } from '@/lib/spotify';
 import { getTotalPlayCount } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
+export const dynamic = "force-dynamic";
+
 export const GET = async () => {
   const loggerStatus = getLoggerStatus();
   const [nowPlaying, totalLogged] = await Promise.all([

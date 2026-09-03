@@ -6,6 +6,8 @@ interface HistoryPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
+export const dynamic = "force-dynamic";
+
 const HistoryPage = async ({ searchParams }: HistoryPageProps) => {
   const resolvedParams = await searchParams;
   const page = Math.max(1, parseInt(String(resolvedParams.page ?? "1"), 10));

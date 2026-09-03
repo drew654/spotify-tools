@@ -6,6 +6,8 @@ import { hasCredentials } from "@/lib/spotify";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 const DashboardPage = async () => {
   const isConnected = await hasCredentials();
 
