@@ -60,8 +60,10 @@ export const customShuffle = async (
 ): Promise<ShuffleProgress> => {
   const playlistId = await getCurrentPlaylistId();
   if (!playlistId) {
-    const err = "No active playlist context found.";
-    return { total: 0, added: 0, failed: 0, done: true, error: err };
+    const err = "No active playlist context found. Please ensure Spotify is currently playing from a playlist.";
+    const result = { total: 0, added: 0, failed: 0, done: true, error: err };
+    onProgress(result);
+    return result;
   }
 
   const [allTracks, recentIds] = await Promise.all([
@@ -69,12 +71,20 @@ export const customShuffle = async (
     Promise.resolve(getRecentTrackIds(recentLimit)),
   ]);
 
+  if (allTracks.length === 0) {
+    const err = `No tracks could be retrieved for playlist (ID: ${playlistId}). Please ensure this playlist contains playable tracks.`;
+    const result = { total: 0, added: 0, failed: 0, done: true, error: err };
+    onProgress(result);
+    return result;
+  }
+
   const excludedIds = new Set(recentIds);
   const filtered = allTracks.filter((t) => !excludedIds.has(t.id));
-  const shuffled = shuffle(filtered);
+  const tracksToShuffle = filtered.length > 0 ? filtered : allTracks;
+  const shuffled = shuffle(tracksToShuffle);
 
   console.log(
-    `[shuffle] Smart Shuffle: ${allTracks.length} total, ${shuffled.length} after excluding ${recentLimit} recent, queuing...`,
+    `[shuffle] Smart Shuffle: ${allTracks.length} total, ${shuffled.length} queued after excluding ${recentLimit} recent, queuing...`,
   );
   return queueTracks(shuffled, onProgress);
 };

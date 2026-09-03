@@ -97,7 +97,7 @@ export const getToken = (key: string): string | null => {
   const db = getDb();
   const row = db.prepare('SELECT value FROM tokens WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? null;
-}
+};
 
 export const saveToken = (key: string, value: string): void => {
   const db = getDb();
@@ -105,7 +105,12 @@ export const saveToken = (key: string, value: string): void => {
     INSERT INTO tokens (key, value) VALUES (?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `).run(key, value);
-}
+};
+
+export const clearTokens = (): void => {
+  const db = getDb();
+  db.prepare('DELETE FROM tokens').run();
+};
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 

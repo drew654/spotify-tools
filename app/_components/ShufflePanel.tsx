@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Shuffle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Shuffle, ListMusic } from "lucide-react";
 
 interface ShuffleProgress {
   total: number;
@@ -15,6 +15,25 @@ const ShufflePanel = () => {
   const [recentLimit, setRecentLimit] = useState(50);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<ShuffleProgress | null>(null);
+  const [targetPlaylist, setTargetPlaylist] = useState<string | null>(null);
+
+  const checkStatus = async () => {
+    try {
+      const res = await fetch("/api/status");
+      if (res.ok) {
+        const data = await res.json();
+        setTargetPlaylist(data.currentContext?.playlist?.name ?? null);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    void checkStatus();
+    const interval = setInterval(() => void checkStatus(), 8000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleShuffle = async () => {
     setLoading(true);
@@ -54,9 +73,6 @@ const ShufflePanel = () => {
               try {
                 const update = JSON.parse(dataStr) as ShuffleProgress;
                 setProgress(update);
-                if (update.error) {
-                  throw new Error(update.error);
-                }
               } catch (e) {
                 console.error("Error parsing SSE data:", e);
               }
@@ -120,6 +136,15 @@ const ShufflePanel = () => {
             </span>
           </div>
         </div>
+
+        {targetPlaylist && (
+          <div className="flex items-center gap-2 text-xs text-spotify-green bg-spotify-green/10 border border-spotify-green/20 px-3.5 py-2.5 rounded-xl font-medium">
+            <ListMusic className="w-4 h-4 shrink-0" />
+            <span className="truncate">
+              Target Playlist: <strong>{targetPlaylist}</strong>
+            </span>
+          </div>
+        )}
 
         {/* Action Button */}
         <button

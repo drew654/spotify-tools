@@ -1,5 +1,5 @@
 import { getLoggerStatus } from '@/lib/logger';
-import { getCurrentlyPlaying } from '@/lib/spotify';
+import { getCurrentlyPlaying, getPlaylistDetails } from '@/lib/spotify';
 import { getTotalPlayCount } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
@@ -11,6 +11,15 @@ export const GET = async () => {
     getCurrentlyPlaying().catch(() => null),
     Promise.resolve(getTotalPlayCount()),
   ]);
+
+  let playlistDetails = null;
+  if (nowPlaying?.context?.type === 'playlist') {
+    const parts = nowPlaying.context.uri.split(':');
+    const playlistId = parts[parts.length - 1];
+    if (playlistId) {
+      playlistDetails = await getPlaylistDetails(playlistId).catch(() => null);
+    }
+  }
 
   return NextResponse.json({
     ...loggerStatus,
@@ -24,6 +33,13 @@ export const GET = async () => {
           isPlaying: nowPlaying.is_playing,
           progressMs: nowPlaying.progress_ms,
           durationMs: nowPlaying.item.duration_ms,
+        }
+      : null,
+    currentContext: nowPlaying?.context
+      ? {
+          type: nowPlaying.context.type,
+          uri: nowPlaying.context.uri,
+          playlist: playlistDetails,
         }
       : null,
     totalLogged,

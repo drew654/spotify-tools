@@ -89,12 +89,13 @@ const spotifyFetch = async <T>(
 
   if (res.status === 204) return null;
   if (!res.ok) {
-    console.error(`[spotify] ${options.method ?? 'GET'} ${endpoint} → ${res.status}`);
+    const errorBody = await res.text().catch(() => '');
+    console.error(`[spotify] ${options.method ?? 'GET'} ${endpoint} → ${res.status}:`, errorBody);
     return null;
   }
 
   return res.json() as Promise<T>;
-}
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -130,7 +131,7 @@ export interface CurrentlyPlaying {
 
 export const getCurrentlyPlaying = async (): Promise<CurrentlyPlaying | null> => {
   return spotifyFetch<CurrentlyPlaying>('/me/player/currently-playing');
-}
+};
 
 export const getRecentlyPlayed = async (limit = 50): Promise<SpotifyTrack[]> => {
   const data = await spotifyFetch<{ items: { track: SpotifyTrack }[]; next: string | null }>(
@@ -151,34 +152,79 @@ export const getRecentlyPlayed = async (limit = 50): Promise<SpotifyTrack[]> => 
   }
 
   return tracks;
-}
+};
 
 export const getTopTracks = async (limit = 50): Promise<SpotifyTrack[]> => {
   const data = await spotifyFetch<{ items: SpotifyTrack[] }>(
     `/me/top/tracks?time_range=short_term&limit=${limit}`
   );
   return data?.items ?? [];
-}
+};
 
 export const getPlaylistTracks = async (playlistId: string): Promise<SpotifyTrack[]> => {
-  const tracks: SpotifyTrack[] = [];
-  let url: string | null = `/playlists/${playlistId}/tracks?limit=100`;
+  const cleanId = playlistId.split('?')[0];
+  const allPlaylistTracks: SpotifyTrack[] = [];
 
-  while (url) {
-    const data: any = await spotifyFetch<{
-      items: { track: SpotifyTrack | null }[];
-      next: string | null;
-    }>(url);
-    if (!data) break;
+  const playlist: any = await spotifyFetch(`/playlists/${cleanId}`);
+  let playlistItems = playlist?.items ?? playlist?.tracks ?? null;
 
-    for (const item of data.items) {
-      if (item.track) tracks.push(item.track);
-    }
-    url = data.next ? data.next.replace(SPOTIFY_API, '') : null;
+  if (!playlistItems) {
+    playlistItems = await spotifyFetch(`/playlists/${cleanId}/items?limit=50`);
   }
 
-  return tracks;
+  while (playlistItems) {
+    const items = playlistItems.items ?? [];
+    for (const wrapper of items) {
+      const t = wrapper?.item ?? (wrapper?.id && wrapper?.uri ? wrapper : null);
+      if (t && (t.type === 'track' || t.uri?.startsWith('spotify:track:'))) {
+        allPlaylistTracks.push({
+          id: t.id,
+          name: t.name,
+          uri: t.uri,
+          artists: Array.isArray(t.artists) ? t.artists : [],
+          album: t.album ?? { name: '', images: [] },
+          duration_ms: t.duration_ms ?? 0,
+        });
+      }
+    }
+
+    if (playlistItems.next) {
+      const nextPath = playlistItems.next.replace(SPOTIFY_API, '');
+      playlistItems = await spotifyFetch(nextPath);
+    } else {
+      break;
+    }
+  }
+
+  return allPlaylistTracks;
+};
+
+export interface SpotifyPlaylistDetails {
+  id: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  ownerName: string | null;
+  totalTracks: number;
+  externalUrl: string | null;
 }
+
+export const getPlaylistDetails = async (playlistId: string): Promise<SpotifyPlaylistDetails | null> => {
+  const data = await spotifyFetch<any>(`/playlists/${playlistId}`);
+  if (!data) return null;
+
+  const total = data.items?.total ?? data.tracks?.total ?? (data.items?.items?.length ?? 0);
+
+  return {
+    id: data.id,
+    name: data.name,
+    description: data.description ?? null,
+    imageUrl: data.images?.[0]?.url ?? null,
+    ownerName: data.owner?.display_name ?? null,
+    totalTracks: total,
+    externalUrl: data.external_urls?.spotify ?? `https://open.spotify.com/playlist/${playlistId}`,
+  };
+};
 
 export const addToQueue = async (trackUri: string): Promise<boolean> => {
   const token = await getValidAccessToken();
@@ -216,10 +262,11 @@ export const buildAuthUrl = (state: string): string => {
     redirect_uri: getRedirectUri(),
     scope: scopes,
     state,
+    show_dialog: 'true',
   });
 
   return `${SPOTIFY_ACCOUNTS}/authorize?${params.toString()}`;
-}
+};
 
 export const exchangeCodeForTokens = async (code: string): Promise<boolean> => {
   const clientId = getClientId();

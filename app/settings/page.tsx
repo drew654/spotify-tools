@@ -10,17 +10,21 @@ interface SettingsPageProps {
 const SettingsPage = ({ searchParams }: SettingsPageProps) => {
   const params = use(searchParams);
   const errorParam = params.error ? String(params.error) : null;
+  const disconnectedParam = params.disconnected ? true : false;
 
   const [isConnected, setIsConnected] = useState(false);
   const [envConfigured, setEnvConfigured] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(
     errorParam
       ? { type: "error", text: `Authentication error: ${errorParam}` }
-      : null,
+      : disconnectedParam
+        ? { type: "success", text: "Successfully signed out from Spotify." }
+        : null,
   );
 
   const fetchSettings = async () => {
@@ -38,6 +42,24 @@ const SettingsPage = ({ searchParams }: SettingsPageProps) => {
       console.error("Failed to load settings:", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
+    try {
+      const res = await fetch("/api/auth/logout", { method: "POST" });
+      if (res.ok) {
+        setIsConnected(false);
+        setStatusMessage({
+          type: "success",
+          text: "Successfully signed out from Spotify. Your stored tokens have been cleared.",
+        });
+      }
+    } catch (e) {
+      console.error("Logout failed:", e);
+    } finally {
+      setDisconnecting(false);
     }
   };
 
@@ -62,12 +84,18 @@ const SettingsPage = ({ searchParams }: SettingsPageProps) => {
           System Connection
         </h1>
         <p className="text-zinc-400 text-sm">
-          Authenticate and monitor your Spotify account connection.
+          Authenticate, re-link, or sign out of your Spotify account.
         </p>
       </div>
 
       {statusMessage && (
-        <div className="p-4 rounded-xl text-sm border bg-red-950/20 border-red-500/30 text-red-400">
+        <div
+          className={`p-4 rounded-xl text-sm border ${
+            statusMessage.type === "success"
+              ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-400"
+              : "bg-red-950/20 border-red-500/30 text-red-400"
+          }`}
+        >
           {statusMessage.text}
         </div>
       )}
@@ -101,36 +129,49 @@ const SettingsPage = ({ searchParams }: SettingsPageProps) => {
 
       {/* Spotify Authentication Connection Card */}
       <div className="glass-panel rounded-2xl p-6 flex flex-col gap-4 border-l-4 border-l-spotify-green">
-        <h3 className="text-base font-bold text-white">
-          Spotify Account Connection
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-white">
+            Spotify Account Connection
+          </h3>
+          <div className="flex items-center gap-2 text-xs">
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${isConnected ? "bg-spotify-green" : "bg-zinc-600"}`}
+            />
+            <span className="text-zinc-300 font-medium">
+              {isConnected ? "Linked to Spotify" : "Not authorized yet"}
+            </span>
+          </div>
+        </div>
+
         <p className="text-zinc-400 text-xs leading-relaxed">
           Link your account to enable play tracking and smart-shuffling. You
           will be redirected to Spotify to log in and confirm permissions.
         </p>
 
-        <div className="flex items-center gap-4 mt-2">
-          {envConfigured ? (
-            <a
-              href="/api/auth/login"
-              className="btn-spotify rounded-xl py-3 px-6 text-center font-bold text-sm inline-block cursor-pointer"
-            >
-              Connect Spotify Account
-            </a>
+        <div className="flex flex-wrap items-center gap-3 mt-2">
+          {!isConnected ? (
+            envConfigured ? (
+              <a
+                href="/api/auth/login"
+                className="btn-spotify rounded-xl py-2.5 px-5 text-center font-bold text-sm inline-block cursor-pointer"
+              >
+                Connect Spotify Account
+              </a>
+            ) : (
+              <span className="bg-zinc-800 text-zinc-500 rounded-xl py-2.5 px-5 text-center font-bold text-sm inline-block cursor-not-allowed opacity-50">
+                Connect Spotify Account
+              </span>
+            )
           ) : (
-            <span className="bg-zinc-800 text-zinc-500 rounded-xl py-3 px-6 text-center font-bold text-sm inline-block cursor-not-allowed opacity-50">
-              Connect Spotify Account
-            </span>
+            <button
+              type="button"
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl py-2.5 px-5 text-sm font-semibold transition-all cursor-pointer disabled:opacity-50"
+            >
+              {disconnecting ? "Signing out..." : "Sign Out"}
+            </button>
           )}
-
-          <div className="flex items-center gap-2 text-xs">
-            <span
-              className={`w-2.5 h-2.5 rounded-full ${isConnected ? "bg-spotify-green" : "bg-zinc-600"}`}
-            />
-            <span className="text-zinc-300">
-              {isConnected ? "Linked to Spotify" : "Not authorized yet"}
-            </span>
-          </div>
         </div>
       </div>
     </div>
