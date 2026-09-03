@@ -34,6 +34,9 @@ COPY --from=builder /app/next.config.ts ./
 COPY --from=builder /app/instrumentation*.js ./
 COPY --from=builder /app/instrumentation*.ts ./
 
+ENV NODE_ENV=production
+ENV DATA_DIR=/data
+
 EXPOSE 3000
 
 CMD ["npm", "run", "start"]
