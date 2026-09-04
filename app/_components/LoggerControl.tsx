@@ -1,34 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useStatus } from "./StatusProvider";
 
-interface Status {
+interface LoggerActionResponse {
   running: boolean;
   lastError: string | null;
   pollCount: number;
 }
 
 const LoggerControl = () => {
-  const [status, setStatus] = useState<Status | null>(null);
+  const { status, setStatus, refreshStatus } = useStatus();
   const [loading, setLoading] = useState(false);
-
-  const fetchStatus = async () => {
-    try {
-      const res = await fetch("/api/status");
-      if (res.ok) {
-        const json = (await res.json()) as Status;
-        setStatus(json);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  useEffect(() => {
-    void fetchStatus();
-    const interval = setInterval(() => void fetchStatus(), 10000);
-    return () => clearInterval(interval);
-  }, []);
 
   const toggleLogger = async () => {
     if (!status) return;
@@ -42,8 +25,9 @@ const LoggerControl = () => {
         body: JSON.stringify({ action }),
       });
       if (res.ok) {
-        const updated = (await res.json()) as Status;
-        setStatus(updated);
+        const updated = (await res.json()) as LoggerActionResponse;
+        setStatus((prev) => (prev ? { ...prev, ...updated } : prev));
+        void refreshStatus();
       }
     } catch (e) {
       console.error(e);

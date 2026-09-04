@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Shuffle, ListMusic } from "lucide-react";
+import { useStatus } from "./StatusProvider";
 
 interface ShuffleProgress {
   total: number;
@@ -12,28 +13,12 @@ interface ShuffleProgress {
 }
 
 const ShufflePanel = () => {
+  const { status } = useStatus();
   const [recentLimit, setRecentLimit] = useState(50);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<ShuffleProgress | null>(null);
-  const [targetPlaylist, setTargetPlaylist] = useState<string | null>(null);
 
-  const checkStatus = async () => {
-    try {
-      const res = await fetch("/api/status");
-      if (res.ok) {
-        const data = await res.json();
-        setTargetPlaylist(data.currentContext?.playlist?.name ?? null);
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  useEffect(() => {
-    void checkStatus();
-    const interval = setInterval(() => void checkStatus(), 8000);
-    return () => clearInterval(interval);
-  }, []);
+  const targetPlaylist = status?.currentContext?.playlist?.name ?? null;
 
   const handleShuffle = async () => {
     setLoading(true);

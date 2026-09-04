@@ -69,12 +69,28 @@ export const getValidAccessToken = async (): Promise<string | null> => {
   return accessToken;
 }
 
-// ─── Spotify API client ───────────────────────────────────────────────────────
+const _endpointCooldowns = new Map<string, number>();
+
+const getRouteKey = (endpoint: string): string => {
+  const clean = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+  const parts = clean.split('/');
+  if (parts[0] === 'me' && parts[1]) {
+    return `${parts[0]}/${parts[1]}`;
+  }
+  return parts[0] || 'default';
+};
 
 const spotifyFetch = async <T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T | null> => {
+  const routeKey = getRouteKey(endpoint);
+  const cooldownUntil = _endpointCooldowns.get(routeKey) ?? 0;
+
+  if (Date.now() < cooldownUntil) {
+    return null;
+  }
+
   const token = await getValidAccessToken();
   if (!token) return null;
 
@@ -90,6 +106,13 @@ const spotifyFetch = async <T>(
   if (res.status === 204) return null;
   if (!res.ok) {
     const errorBody = await res.text().catch(() => '');
+    if (res.status === 429) {
+      const retryAfterHeader = res.headers.get('Retry-After');
+      const retryAfterSec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 10;
+      const cooldownSec = Math.min(isNaN(retryAfterSec) ? 10 : Math.max(retryAfterSec, 5), 60);
+      _endpointCooldowns.set(routeKey, Date.now() + cooldownSec * 1000);
+      console.warn(`[spotify] Rate limit 429 encountered on [${routeKey}]. Backing off that route for ${cooldownSec}s.`);
+    }
     console.error(`[spotify] ${options.method ?? 'GET'} ${endpoint} → ${res.status}:`, errorBody);
     return null;
   }
@@ -129,8 +152,18 @@ export interface CurrentlyPlaying {
 
 // ─── API calls ────────────────────────────────────────────────────────────────
 
+let _lastKnownPlayback: { data: CurrentlyPlaying | null; timestamp: number } | null = null;
+
 export const getCurrentlyPlaying = async (): Promise<CurrentlyPlaying | null> => {
-  return spotifyFetch<CurrentlyPlaying>('/me/player/currently-playing');
+  const result = await spotifyFetch<CurrentlyPlaying>('/me/player/currently-playing');
+  if (result !== null) {
+    _lastKnownPlayback = { data: result, timestamp: Date.now() };
+    return result;
+  }
+  if (_lastKnownPlayback && Date.now() - _lastKnownPlayback.timestamp < 30_000) {
+    return _lastKnownPlayback.data;
+  }
+  return null;
 };
 
 export const getRecentlyPlayed = async (limit = 50): Promise<SpotifyTrack[]> => {
@@ -209,21 +242,43 @@ export interface SpotifyPlaylistDetails {
   externalUrl: string | null;
 }
 
+const PLAYLIST_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const _playlistCache = new Map<string, { data: SpotifyPlaylistDetails | null; expiresAt: number }>();
+
 export const getPlaylistDetails = async (playlistId: string): Promise<SpotifyPlaylistDetails | null> => {
-  const data = await spotifyFetch<any>(`/playlists/${playlistId}`);
-  if (!data) return null;
+  const cleanId = playlistId.split('?')[0];
+  const cached = _playlistCache.get(cleanId);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+
+  const data = await spotifyFetch<any>(`/playlists/${cleanId}`);
+  if (!data) {
+    _playlistCache.set(cleanId, {
+      data: cached?.data ?? null,
+      expiresAt: Date.now() + PLAYLIST_CACHE_TTL_MS,
+    });
+    return cached?.data ?? null;
+  }
 
   const total = data.items?.total ?? data.tracks?.total ?? (data.items?.items?.length ?? 0);
 
-  return {
+  const details: SpotifyPlaylistDetails = {
     id: data.id,
     name: data.name,
     description: data.description ?? null,
     imageUrl: data.images?.[0]?.url ?? null,
     ownerName: data.owner?.display_name ?? null,
     totalTracks: total,
-    externalUrl: data.external_urls?.spotify ?? `https://open.spotify.com/playlist/${playlistId}`,
+    externalUrl: data.external_urls?.spotify ?? `https://open.spotify.com/playlist/${cleanId}`,
   };
+
+  _playlistCache.set(cleanId, {
+    data: details,
+    expiresAt: Date.now() + PLAYLIST_CACHE_TTL_MS,
+  });
+
+  return details;
 };
 
 export const addToQueue = async (trackUri: string): Promise<boolean> => {

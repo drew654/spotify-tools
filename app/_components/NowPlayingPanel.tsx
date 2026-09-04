@@ -4,71 +4,18 @@ import { useEffect, useState } from "react";
 import TrackCard from "./TrackCard";
 import StatusBadge from "./StatusBadge";
 import { Music, ListMusic, ExternalLink, Disc, Radio } from "lucide-react";
-
-interface NowPlaying {
-  id: string;
-  name: string;
-  artists: string[];
-  albumName: string | null;
-  albumArt: string | null;
-  isPlaying: boolean;
-  progressMs: number;
-  durationMs: number;
-}
-
-interface PlaylistDetails {
-  id: string;
-  name: string;
-  description: string | null;
-  imageUrl: string | null;
-  ownerName: string | null;
-  totalTracks: number;
-  externalUrl: string | null;
-}
-
-interface CurrentContext {
-  type: string;
-  uri: string;
-  playlist: PlaylistDetails | null;
-}
-
-interface StatusResponse {
-  running: boolean;
-  lastError: string | null;
-  pollCount: number;
-  nowPlaying: NowPlaying | null;
-  currentContext: CurrentContext | null;
-  totalLogged: number;
-}
+import { useStatus } from "./StatusProvider";
 
 const NowPlayingPanel = () => {
-  const [data, setData] = useState<StatusResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { status: data, loading, refreshStatus } = useStatus();
   const [progress, setProgress] = useState(0);
 
-  const fetchStatus = async () => {
-    try {
-      const res = await fetch("/api/status");
-      if (res.ok) {
-        const json = (await res.json()) as StatusResponse;
-        setData(json);
-        if (json.nowPlaying) {
-          setProgress(json.nowPlaying.progressMs);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch status:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Poll status every 8 seconds
+  // Sync progress with status updates
   useEffect(() => {
-    void fetchStatus();
-    const interval = setInterval(() => void fetchStatus(), 8000);
-    return () => clearInterval(interval);
-  }, []);
+    if (data?.nowPlaying) {
+      setProgress(data.nowPlaying.progressMs);
+    }
+  }, [data?.nowPlaying?.id, data?.nowPlaying?.progressMs]);
 
   // Increment playback progress bar locally each second when playing
   useEffect(() => {
@@ -78,7 +25,7 @@ const NowPlayingPanel = () => {
       setProgress((prev) => {
         const next = prev + 1000;
         if (data.nowPlaying && next >= data.nowPlaying.durationMs) {
-          void fetchStatus(); // Refresh status when track ends
+          void refreshStatus(); // Refresh status when track ends
           return data.nowPlaying.durationMs;
         }
         return next;
@@ -86,7 +33,7 @@ const NowPlayingPanel = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [data]);
+  }, [data, refreshStatus]);
 
   if (loading) {
     return (

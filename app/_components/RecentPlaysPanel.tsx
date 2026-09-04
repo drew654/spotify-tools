@@ -34,8 +34,25 @@ const RecentPlaysPanel = () => {
 
   useEffect(() => {
     void fetchPlays();
-    const interval = setInterval(() => void fetchPlays(), 12000);
-    return () => clearInterval(interval);
+
+    let interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void fetchPlays();
+      }
+    }, 12000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchPlays();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   if (loading && plays.length === 0) {
