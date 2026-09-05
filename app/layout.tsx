@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
-import { LayoutDashboard, History, Settings } from "lucide-react";
+import SidebarNav from "./_components/SidebarNav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,29 +44,7 @@ const RootLayout = ({
               </Link>
 
               {/* Navigation Menu */}
-              <nav className="flex flex-col gap-1.5">
-                <Link
-                  href="/"
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
-                >
-                  <LayoutDashboard className="w-5 h-5 text-zinc-400" />
-                  Dashboard
-                </Link>
-                <Link
-                  href="/history"
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
-                >
-                  <History className="w-5 h-5 text-zinc-400" />
-                  Play History
-                </Link>
-                <Link
-                  href="/settings"
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
-                >
-                  <Settings className="w-5 h-5 text-zinc-400" />
-                  Settings
-                </Link>
-              </nav>
+              <SidebarNav />
             </div>
 
             <div className="p-6 border-t border-white/5 text-[10px] text-zinc-500 font-mono">
