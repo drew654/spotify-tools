@@ -1,6 +1,7 @@
 import { getRecentPlays, getTotalPlayCount } from "@/lib/db";
+import { hasCredentials } from "@/lib/spotify";
 import Link from "next/link";
-import { History } from "lucide-react";
+import { History, Music2 } from "lucide-react";
 
 interface HistoryPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -9,6 +10,7 @@ interface HistoryPageProps {
 export const dynamic = "force-dynamic";
 
 const HistoryPage = async ({ searchParams }: HistoryPageProps) => {
+  const isConnected = await hasCredentials();
   const resolvedParams = await searchParams;
   const page = Math.max(1, parseInt(String(resolvedParams.page ?? "1"), 10));
   const limit = Math.max(
@@ -17,8 +19,8 @@ const HistoryPage = async ({ searchParams }: HistoryPageProps) => {
   );
   const offset = (page - 1) * limit;
 
-  const plays = getRecentPlays(limit, offset);
-  const total = getTotalPlayCount();
+  const plays = isConnected ? getRecentPlays(limit, offset) : [];
+  const total = isConnected ? getTotalPlayCount() : 0;
   const totalPages = Math.ceil(total / limit);
 
   return (
@@ -34,7 +36,30 @@ const HistoryPage = async ({ searchParams }: HistoryPageProps) => {
         </p>
       </div>
 
-      {/* Main Table Panel */}
+      {!isConnected ? (
+        /* ── Not-connected gate ── */
+        <div className="flex flex-col items-center justify-center gap-6 py-24 text-center">
+          <div className="bg-white/5 border border-white/8 rounded-full p-6">
+            <Music2 className="w-12 h-12 text-zinc-500" />
+          </div>
+          <div className="flex flex-col gap-2 max-w-sm">
+            <h2 className="text-xl font-bold text-white">
+              Spotify not connected
+            </h2>
+            <p className="text-zinc-400 text-sm leading-relaxed">
+              You need to configure your Spotify credentials and authenticate
+              before the play history is available.
+            </p>
+          </div>
+          <Link
+            href="/settings"
+            className="btn-spotify rounded-xl px-6 py-3 text-sm font-bold"
+          >
+            Connect Spotify Account
+          </Link>
+        </div>
+      ) : (
+      /* ── Main Table Panel ── */
       <div className="glass-panel rounded-2xl overflow-hidden border border-white/5 bg-white/3">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -148,6 +173,7 @@ const HistoryPage = async ({ searchParams }: HistoryPageProps) => {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 };
