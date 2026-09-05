@@ -91,6 +91,16 @@ export const getRecentTrackIds = (limit: number): string[] => {
   return rows.map(r => r.track_id);
 }
 
+export const getTrackIdsPlayedSince = (sinceDate: Date): string[] => {
+  const db = getDb();
+  const sinceIso = sinceDate.toISOString();
+  const rows = db.prepare(`
+    SELECT DISTINCT track_id FROM plays
+    WHERE played_at >= ?
+  `).all(sinceIso) as { track_id: string }[];
+  return rows.map(r => r.track_id);
+}
+
 // ─── Tokens ──────────────────────────────────────────────────────────────────
 
 export const getToken = (key: string): string | null => {

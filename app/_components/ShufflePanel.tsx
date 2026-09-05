@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Shuffle, ListMusic, Square } from "lucide-react";
+import { Shuffle, ListMusic, Square, Calendar } from "lucide-react";
 import { useStatus } from "./StatusProvider";
 
 interface ShuffleProgress {
@@ -13,9 +13,25 @@ interface ShuffleProgress {
   error?: string;
 }
 
+type FilterMode = "today" | "week" | "month" | "custom";
+
+interface FilterOption {
+  mode: FilterMode;
+  label: string;
+  description: string;
+}
+
+const FILTER_OPTIONS: FilterOption[] = [
+  { mode: "today", label: "New for today", description: "Not played since midnight" },
+  { mode: "week", label: "New for this week", description: "Not played since Sunday" },
+  { mode: "month", label: "New for this month", description: "Not played since the 1st" },
+  { mode: "custom", label: "New for x days", description: "Custom day window" },
+];
+
 const ShufflePanel = () => {
   const { status } = useStatus();
-  const [recentLimit, setRecentLimit] = useState(50);
+  const [filterMode, setFilterMode] = useState<FilterMode>("week");
+  const [customDays, setCustomDays] = useState<string>("14");
   const [maxQueue, setMaxQueue] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -63,7 +79,18 @@ const ShufflePanel = () => {
     abortControllerRef.current = controller;
 
     const parsedMaxQueue = maxQueue.trim() !== "" ? parseInt(maxQueue, 10) : null;
-    const payload: { recentLimit: number; maxQueue?: number } = { recentLimit };
+    const parsedCustomDays = parseInt(customDays, 10);
+
+    const payload: {
+      filterMode: FilterMode;
+      customDays?: number;
+      maxQueue?: number;
+    } = { filterMode };
+
+    if (filterMode === "custom" && !isNaN(parsedCustomDays) && parsedCustomDays > 0) {
+      payload.customDays = parsedCustomDays;
+    }
+
     if (parsedMaxQueue !== null && !isNaN(parsedMaxQueue) && parsedMaxQueue > 0) {
       payload.maxQueue = parsedMaxQueue;
     }
@@ -152,67 +179,95 @@ const ShufflePanel = () => {
         </h3>
         <p className="text-zinc-500 text-xs mt-1">
           Smart-shuffles your currently playing playlist by excluding recently
-          logged tracks from your database.
+          played tracks from your database.
         </p>
       </div>
 
       <div className="flex flex-col gap-4">
-        {/* Shuffle options */}
-        <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col sm:flex-row gap-4 sm:gap-6">
-          {/* Exclude Limit */}
-          <div className="flex-1 flex flex-col gap-2">
-            <label
-              className="text-xs text-zinc-400 font-semibold"
-              htmlFor="limitInput"
-            >
-              Exclude Limit
-            </label>
-            <div className="flex items-center gap-3">
+        {/* Filter mode selector */}
+        <div className="flex flex-col gap-2">
+          <label className="text-xs text-zinc-400 font-semibold flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-spotify-green" />
+            Freshness Filter
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {FILTER_OPTIONS.map((opt) => {
+              const isActive = filterMode === opt.mode;
+              return (
+                <button
+                  key={opt.mode}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setFilterMode(opt.mode)}
+                  className={`relative flex flex-col items-start px-3.5 py-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+                    isActive
+                      ? "bg-spotify-green/15 border-spotify-green/50 text-white"
+                      : "bg-white/5 border-white/8 text-zinc-400 hover:border-white/20 hover:text-zinc-200 hover:bg-white/8"
+                  }`}
+                >
+                  {isActive && (
+                    <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-spotify-green" />
+                  )}
+                  <span className={`text-xs font-semibold ${isActive ? "text-spotify-green" : ""}`}>
+                    {opt.label}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 mt-0.5">
+                    {opt.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Custom days input */}
+          {filterMode === "custom" && (
+            <div className="flex items-center gap-3 mt-1 pl-1">
               <input
-                id="limitInput"
+                id="customDaysInput"
                 type="number"
                 disabled={loading}
                 min={1}
-                value={recentLimit}
-                onChange={(e) =>
-                  setRecentLimit(Math.max(1, parseInt(e.target.value) || 0))
-                }
+                value={customDays}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "" || parseInt(val) >= 1) setCustomDays(val);
+                }}
                 className="w-24 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-spotify-green"
               />
               <span className="text-xs text-zinc-500">
-                Recent tracks in database to exclude.
+                days to look back
               </span>
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Queue Limit */}
-          <div className="flex-1 flex flex-col gap-2 sm:border-l sm:border-white/5 sm:pl-6">
-            <label
-              className="text-xs text-zinc-400 font-semibold"
-              htmlFor="queueLimitInput"
-            >
-              Queue Limit
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                id="queueLimitInput"
-                type="number"
-                disabled={loading}
-                min={1}
-                placeholder="All"
-                value={maxQueue}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === "" || parseInt(val) >= 1) {
-                    setMaxQueue(val);
-                  }
-                }}
-                className="w-24 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-spotify-green placeholder:text-zinc-600"
-              />
-              <span className="text-xs text-zinc-500">
-                Max songs to queue (leave empty for all).
-              </span>
-            </div>
+        {/* Queue Limit */}
+        <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col gap-2">
+          <label
+            className="text-xs text-zinc-400 font-semibold"
+            htmlFor="queueLimitInput"
+          >
+            Queue Limit
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              id="queueLimitInput"
+              type="number"
+              disabled={loading}
+              min={1}
+              placeholder="All"
+              value={maxQueue}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "" || parseInt(val) >= 1) {
+                  setMaxQueue(val);
+                }
+              }}
+              className="w-24 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-spotify-green placeholder:text-zinc-600"
+            />
+            <span className="text-xs text-zinc-500">
+              Max songs to queue (leave empty for all).
+            </span>
           </div>
         </div>
 

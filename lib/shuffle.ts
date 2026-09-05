@@ -4,7 +4,7 @@ import {
   addToQueue,
   type SpotifyTrack,
 } from "./spotify";
-import { getRecentTrackIds } from "./db";
+import { getTrackIdsPlayedSince } from "./db";
 
 export interface ShuffleProgress {
   total: number;
@@ -16,7 +16,7 @@ export interface ShuffleProgress {
 }
 
 export interface ShuffleOptions {
-  recentLimit?: number;
+  sinceDate?: Date;
   maxQueue?: number | null;
   signal?: AbortSignal;
 }
@@ -110,21 +110,10 @@ const queueTracks = async (
 };
 
 export const customShuffle = async (
-  recentLimitOrOptions: number | ShuffleOptions,
+  options: ShuffleOptions,
   onProgress: (p: ShuffleProgress) => void,
-  optionalSignal?: AbortSignal,
 ): Promise<ShuffleProgress> => {
-  let recentLimit = 50;
-  let maxQueue: number | null = null;
-  let callerSignal: AbortSignal | undefined = optionalSignal;
-
-  if (typeof recentLimitOrOptions === "number") {
-    recentLimit = recentLimitOrOptions;
-  } else if (recentLimitOrOptions) {
-    recentLimit = recentLimitOrOptions.recentLimit ?? 50;
-    maxQueue = recentLimitOrOptions.maxQueue ?? null;
-    callerSignal = callerSignal ?? recentLimitOrOptions.signal;
-  }
+  const { sinceDate, maxQueue = null, signal: callerSignal } = options;
 
   const controller = new AbortController();
   _activeAbortController = controller;
@@ -155,10 +144,9 @@ export const customShuffle = async (
       return result;
     }
 
-    const [allTracks, recentIds] = await Promise.all([
-      getPlaylistTracks(playlistId),
-      Promise.resolve(getRecentTrackIds(recentLimit)),
-    ]);
+    const playedIds = sinceDate ? getTrackIdsPlayedSince(sinceDate) : [];
+
+    const [allTracks] = await Promise.all([getPlaylistTracks(playlistId)]);
 
     if (controller.signal.aborted) {
       const result: ShuffleProgress = {
@@ -185,7 +173,7 @@ export const customShuffle = async (
       return result;
     }
 
-    const excludedIds = new Set(recentIds);
+    const excludedIds = new Set(playedIds);
     const filtered = allTracks.filter((t) => !excludedIds.has(t.id));
     const tracksToShuffle = filtered.length > 0 ? filtered : allTracks;
     let shuffled = shuffle(tracksToShuffle);
@@ -194,8 +182,11 @@ export const customShuffle = async (
       shuffled = shuffled.slice(0, maxQueue);
     }
 
+    const windowLabel = sinceDate
+      ? `since ${sinceDate.toISOString()}`
+      : "no date filter";
     console.log(
-      `[shuffle] Smart Shuffle: ${allTracks.length} total, queuing ${shuffled.length} tracks (excluded ${recentLimit} recent, maxQueue: ${maxQueue ?? "none"})...`,
+      `[shuffle] Smart Shuffle: ${allTracks.length} total, ${excludedIds.size} excluded (${windowLabel}), queuing ${shuffled.length} tracks (maxQueue: ${maxQueue ?? "none"})...`,
     );
 
     return await queueTracks(shuffled, onProgress, controller.signal);
